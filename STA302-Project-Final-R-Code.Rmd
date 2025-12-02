@@ -1,0 +1,341 @@
+---
+title: "Final Project: AirBnB"
+output:
+  pdf_document: default
+  html_document: default
+date: "2025-06-14"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(readr)
+library(dplyr)
+library(robustbase)
+library(MASS)
+
+```
+
+
+Model 1
+```{r}
+df <- read.csv('cleaned_airbnb.csv')
+df$log_reviews <- log(df$number_of_reviews + 1)
+model <- lm(price ~ accommodates + 
+              bedrooms + 
+              number_of_reviews + 
+              host_is_superhost + 
+              review_scores_rating, 
+            data = df)
+summary(model)
+
+df$residuals <- residuals(model)
+df$fitted <- fitted(model)
+df$std_resid <- rstandard(model)
+df$leverage <- hatvalues(model)
+df$cooks_distance <- cooks.distance(model)
+
+ggplot(df, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Residuals vs Fitted", x = "Fitted values", 
+       y = "Residuals") +
+  theme_minimal()
+
+ggplot(df, aes(sample = residuals)) +
+  stat_qq(alpha = 0.4) +
+  stat_qq_line(color = "red") +
+  labs(title = "Normal Q-Q Plot", x = "Theoretical Quantiles", 
+       y = "Sample Quantiles") +
+  theme_minimal()
+
+ggplot(df, aes(x = fitted, y = sqrt(abs(std_resid)))) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Scale-Location", x = "Fitted values", 
+       y = "Squared root (Standardized Residuals)") +
+  theme_minimal()
+df$fitted <- fitted(model)
+df$std_resid <- rstandard(model)
+
+ggplot(df, aes(x = fitted, y = std_resid)) +
+geom_point(alpha = 0.4) +
+geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+geom_smooth(method = "loess", color = "red", se = FALSE) +
+labs(
+title = "Standardized Residuals vs Fitted Values",
+x = "Fitted Values",
+y = "Standardized Residuals"
+) +
+theme_minimal()
+##`geom_smooth()` us
+```
+
+
+# Fit transformed model
+
+```{r}
+model_transformed <- lm(log(price) ~ poly(accommodates, 2) + 
+                          poly(bedrooms, 2) + 
+                          log_reviews + 
+                          review_scores_rating, 
+                        data = df)
+
+summary(model_transformed)
+
+
+# Add diagnostics to df
+df$trans_resid <- residuals(model_transformed)
+df$trans_fitted <- fitted(model_transformed)
+df$trans_std_resid <- rstandard(model_transformed)
+df$trans_leverage <- hatvalues(model_transformed)
+df$trans_cooks_distance <- cooks.distance(model_transformed)
+
+
+
+ggplot(df, aes(x = trans_fitted, y = trans_resid)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Residuals vs Fitted (Transformed Model)",
+       x = "Fitted values", y = "Residuals") +
+  theme_minimal()
+
+ggplot(df, aes(sample = trans_resid)) +
+  stat_qq(alpha = 0.4) +
+  stat_qq_line(color = "red") +
+  labs(title = "Normal Q-Q Plot (Transformed Model)",
+       x = "Theoretical Quantiles", y = "Sample Quantiles") +
+  theme_minimal()
+
+ggplot(df, aes(x = trans_fitted, y = sqrt(abs(trans_std_resid)))) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Scale-Location (Transformed Model)",
+       x = "Fitted values", y = "Sqrt(|Standardized Residuals|)") +
+  theme_minimal()
+
+
+ggplot(df, aes(x = trans_fitted, y = trans_std_resid)) +
+  geom_point(alpha = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Standardized Residuals vs Fitted (Transformed Model)",
+       x = "Fitted values", y = "Standardized Residuals") +
+  theme_minimal()
+```
+
+
+
+
+#final model preliminary
+```{r}
+model_final <- lm(
+  log(price) ~
+    poly(accommodates, 2) +
+    poly(bedrooms, 2) +
+    log_reviews +
+    host_is_superhost +
+    review_scores_rating +
+    accommodates:bedrooms +
+    accommodates:host_is_superhost +
+    log_reviews:host_is_superhost +
+    I(accommodates / (bedrooms + 1)),
+  data = df
+)
+
+
+summary(model_final)
+
+# Extract diagnostics
+df$final_resid <- residuals(model_final)
+df$final_fitted <- fitted(model_final)
+df$final_std_resid <- rstandard(model_final)
+
+
+#calculate outliers
+df$std_resid <- rstandard(model_final)
+outlier_count <- sum(abs(df$std_resid) > 3)
+cat("Number of potential outliers (|std_resid| > 3):", outlier_count, "\n")
+
+df$leverage <- hatvalues(model_final)
+n <- nrow(df)
+p <- length(coefficients(model_final))  # includes intercept
+leverage_threshold <- 2 * p / n
+
+
+#How many exceeds threshold?
+high_lev_count <- sum(df$leverage > leverage_threshold)
+cat("Number of high leverage points (h > 2p/n):", high_lev_count, "\n")
+cat("Threshold used:", leverage_threshold, "\n")
+
+df$cooks_d <- cooks.distance(model_final)
+n <- nrow(df)
+cooks_threshold <- 4 / n
+
+
+# Count number of influential observations
+influential_count <- sum(df$cooks_d > cooks_threshold)
+cat("Number of influential points (Cook's D > 4/n):", influential_count, "\n")
+
+```
+
+
+```{r}
+# Plot 1: Residuals vs Fitted
+ggplot(df, aes(x = final_fitted, y = final_resid)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", se = FALSE, color = "red") +
+  labs(title = "Residuals vs Fitted (Final Model)",
+       x = "Fitted Values", y = "Residuals") +
+  theme_minimal()
+
+# Plot 2: Normal Q-Q
+ggplot(df, aes(sample = final_resid)) +
+  stat_qq(alpha = 0.4) +
+  stat_qq_line(color = "red") +
+  labs(title = "Normal Q-Q Plot (Final Model)",
+       x = "Theoretical Quantiles", y = "Sample Quantiles") +
+  theme_minimal()
+
+# Plot 3: Scale-Location Plot
+ggplot(df, aes(x = final_fitted, y = sqrt(abs(final_std_resid)))) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", se = FALSE, color = "red") +
+  labs(title = "Scale-Location Plot (Final Model)",
+       x = "Fitted Values", y = "Sqrt(|Standardized Residuals|)") +
+  theme_minimal()
+
+# Plot 4: Standardized Residuals vs Fitted
+ggplot(df, aes(x = final_fitted, y = final_std_resid)) +
+  geom_point(alpha = 0.4) +
+  geom_hline(yintercept = 0, color = "gray", linetype = "dashed") +
+  geom_smooth(method = "loess", se = FALSE, color = "red") +
+  labs(title = "Standardized Residuals vs Fitted (Final Model)",
+       x = "Fitted Values", y = "Standardized Residuals") +
+  theme_minimal()
+
+```
+
+
+
+#robust regression model
+```{r}
+model_final_robust <- lmrob(
+  log(price) ~
+    poly(accommodates, 2) +
+    poly(bedrooms, 2) +
+    log_reviews +
+    host_is_superhost +
+    review_scores_rating +
+    accommodates:bedrooms +
+    log_reviews:host_is_superhost +
+    I(accommodates / (bedrooms + 1)),
+  data = df
+)
+
+
+summary(model_final_robust)
+
+
+# Extract diagnostics
+df$final_resid_r <- residuals(model_final_robust)
+df$final_fitted_r <- fitted(model_final_robust)
+df$final_std_resid_r <- residuals(model_final_robust) / 
+  summary(model_final_robust)$scale
+
+
+df$robust_weight <- model_final_robust$rweights
+df$is_downweighted <- df$robust_weight < 0.1
+
+# Count how many were heavily downweighted
+sum(df$is_downweighted)  # This is the number of points lmrob treats as outliers
+summary(model_final_robust)$r.squared
+
+
+# Number of observations used in the model (excluding NA rows)
+# Custom function to compute AIC and BIC
+# Custom function to compute AIC and BIC
+get_custom_aic_bic <- function(model) {
+  n <- length(residuals(model))
+  p <- length(coef(model))  # include intercept
+  rss <- sum(residuals(model)^2)
+  
+  aic <- n * log(rss / n) + 2 * p
+  bic <- n * log(rss / n) + p * log(n)
+  
+  return(c(AIC = aic, BIC = bic))
+}
+
+
+# Compute metrics and store in a data frame
+results <- data.frame(
+  Model = c("model", "model_transformed", "model_final", '"model_final_robust"'),
+  AIC = c(
+    get_custom_aic_bic(model)[["AIC"]],
+    get_custom_aic_bic(model_transformed)[["AIC"]],
+    get_custom_aic_bic(model_final)[["AIC"]],
+    get_custom_aic_bic(model_final_robust)[["AIC"]]
+  ),
+  BIC = c(
+    get_custom_aic_bic(model)[["BIC"]],
+    get_custom_aic_bic(model_transformed)[["BIC"]],
+    get_custom_aic_bic(model_final)[["BIC"]],
+    get_custom_aic_bic(model_final_robust)[["BIC"]]
+  ),
+  R_squared = c(
+    summary(model)$r.squared,
+    summary(model_transformed)$r.squared,
+    summary(model_final)$r.squared,
+    summary(model_final_robust)$r.squared
+  ),
+  Adj_R_squared = c(
+    summary(model)$adj.r.squared,
+    summary(model_transformed)$adj.r.squared,
+    summary(model_final)$adj.r.squared,
+    summary(model_final_robust)$adj.r.squared
+  )
+)
+print(results)
+
+```
+
+
+```{r}
+# Plot 1: Residuals vs Fitted
+ggplot(df, aes(x = final_fitted_r, y = final_resid_r)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", se = FALSE, color = "red") +
+  labs(title = "Residuals vs Fitted (Final Robust Model)",
+       x = "Fitted Values", y = "Residuals") +
+  theme_minimal()
+
+# Plot 2: Normal Q-Q
+ggplot(df, aes(sample = final_resid_r)) +
+  stat_qq(alpha = 0.4) +
+  stat_qq_line(color = "red") +
+  labs(title = "Normal Q-Q Plot (Final Robust Model)",
+       x = "Theoretical Quantiles", y = "Sample Quantiles") +
+  theme_minimal()
+
+# Plot 3: Scale-Location Plot
+ggplot(df, aes(x = final_fitted_r, y = sqrt(abs(final_std_resid_r)))) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", se = FALSE, color = "red") +
+  labs(title = "Scale-Location Plot (Final Robust Model)",
+       x = "Fitted Values", y = "Sqrt(|Standardized Residuals|)") +
+  theme_minimal()
+
+# Plot 4: Standardized Residuals vs Fitted
+ggplot(df, aes(x = final_fitted_r, y = final_std_resid_r)) +
+  geom_point(alpha = 0.4) +
+  geom_hline(yintercept = 0, color = "gray", linetype = "dashed") +
+  geom_smooth(method = "loess", se = FALSE, color = "red") +
+  labs(title = "Standardized Residuals vs Fitted (Final Robust Model)",
+       x = "Fitted Values", y = "Standardized Residuals") +
+  theme_minimal()
+```
+
+

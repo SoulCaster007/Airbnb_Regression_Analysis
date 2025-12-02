@@ -1,0 +1,133 @@
+---
+title: "AirBnB Project Analysis"
+output:
+  pdf_document: default
+  html_document: default
+date: "2025-05-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(readr)
+```
+
+```{r}
+df <- read_csv("listings-2.csv")
+
+df <- df %>% filter(!is.na(price))
+df$price <- as.numeric(gsub("[$,]", "", df$price))
+```
+
+```{r}
+df$bedrooms <- ifelse(
+  is.na(df$bedrooms) & df$beds >= 1, 1,
+  ifelse(is.na(df$bedrooms), 0, df$bedrooms)
+)
+```
+
+```{r}
+df$review_scores_rating[is.na(df$review_scores_rating) & df$number_of_reviews == 0] <- 0
+
+```
+
+```{r}
+df$host_is_superhost[is.na(df$host_is_superhost)] <- "f"
+```
+
+```{r}
+df$host_is_superhost <- ifelse(df$host_is_superhost == "t", 1, 0)
+```
+
+```{r}
+df <- df %>% select(price, accommodates, bedrooms, number_of_reviews, host_is_superhost, review_scores_rating)
+
+```
+
+```{r}
+price_cap <- quantile(df$price, 0.99)
+df <- df %>% filter(price > 0, price < price_cap)
+```
+
+```{r}
+write_csv(df, "cleaned_listings.csv")
+
+```
+
+```{r}
+library(ggplot2)
+library(readr)
+library(dplyr)
+
+df <- read_csv("cleaned_listings.csv")
+
+
+model <- lm(price ~ accommodates + bedrooms + number_of_reviews +
+              review_scores_rating + host_is_superhost, data = df)
+
+df$residuals <- residuals(model)
+df$fitted <- fitted(model)
+df$std_resid <- rstandard(model)
+df$leverage <- hatvalues(model)
+df$cooks_distance <- cooks.distance(model)
+
+
+ggplot(df, aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Residuals vs Fitted", x = "Fitted values", y = "Residuals") +
+  theme_minimal()
+
+
+ggplot(df, aes(sample = residuals)) +
+  stat_qq(alpha = 0.4) +
+  stat_qq_line(color = "red") +
+  labs(title = "Normal Q-Q Plot", x = "Theoretical Quantiles", y = "Sample Quantiles") +
+  theme_minimal()
+
+
+ggplot(df, aes(x = fitted, y = sqrt(abs(std_resid)))) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(title = "Scale-Location", x = "Fitted values", y = "Squared root (Standardized Residuals)") +
+  theme_minimal()
+
+df$fitted <- fitted(model)
+df$std_resid <- rstandard(model)
+
+ggplot(df, aes(x = fitted, y = std_resid)) +
+  geom_point(alpha = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray") +
+  geom_smooth(method = "loess", color = "red", se = FALSE) +
+  labs(
+    title = "Standardized Residuals vs Fitted Values",
+    x = "Fitted Values",
+    y = "Standardized Residuals"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+# Load necessary libraries
+library(readr)
+library(dplyr)
+
+# Read the cleaned dataset
+cleaned_data <- read_csv("cleaned_listings.csv")
+
+# Fit the linear model
+model <- lm(price ~ accommodates + bedrooms + number_of_reviews + 
+              host_is_superhost + review_scores_rating, 
+            data = cleaned_data)
+
+# Print the summary of the model
+summary(model)
+
+```
+
+
+
