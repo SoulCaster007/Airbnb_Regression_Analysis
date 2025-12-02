@@ -119,13 +119,3 @@ For **platforms / analysts**:
   - Residual and influence diagnostics  
 
 ---
-
-## 📂 Project Structure
-
-```text
-/
-├── data/          # Raw and cleaned Airbnb datasets
-├── code/          # R scripts for EDA, modeling, diagnostics
-├── figures/       # Plots (EDA, residuals, Q–Q, etc.)
-├── report/        # Final project report (PDF)
-└── README.md      # Project overview (this file)
